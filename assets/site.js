@@ -10,7 +10,7 @@ const SITE = {
   orgFlag: "🇵🇾",
   bio: "Profesor de inteligencia artificial desde hace 8 años. Publico mis experimentos con modelos de lenguaje, con demos interactivas.",
   initials: "EP",
-  photo: "",                     /* ej. "assets/foto.jpg" (cuadrada, 400 × 400 px o más) */
+  photo: "assets/1664666241569.jpg",                     /* ej. "assets/foto.jpg" (cuadrada, 400 × 400 px o más) */
   socials: {                     /* dejar "" para ocultar un botón */
     github: "https://github.com/EnPaiva93",
     linkedin: "",
