@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@500;600&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("tema");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>Nueve experimentos en la competencia RSNA Knee Abnormality Detection · Enrique Paiva</title>
+<link rel="stylesheet" href="../../assets/site.css?v=3">
+<style>.cmp{width:100%;border-collapse:collapse;font:400 15px var(--ui);margin:6px 0 22px}.cmp td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}.log td:first-child{white-space:nowrap;font:400 13.5px var(--mono);color:var(--muted);width:5.5rem}.wrap{overflow-x:auto}.row .tk{font-size:13px}.formula{font-size:19px;line-height:1.9}.chips{display:flex;flex-wrap:wrap;gap:6px}.chips .btn{min-height:30px;padding:3px 10px;font:500 13px var(--mono)}.sub2{font:600 14px var(--ui);color:var(--ink-2);margin:8px 0 2px}</style>
+</head>
+<body data-root="../../" data-page="post">
+<div class="progress" id="progress" hidden></div>
+<div class="shell">
+  <aside class="side" id="side" aria-label="Perfil"></aside>
+  <div class="content">
+    <div class="toolbar" id="toolbar"></div>
+
+    <article class="col">
+      <header class="post-head">
+        <h1>Nueve experimentos en la competencia RSNA Knee Abnormality Detection</h1>
+        <p class="lead" style="margin-top:16px">Participé en la competencia RSNA Knee Abnormality Detection de Kaggle con una GPU T4 y 30 horas de cuota por semana. Llegué a 0,927 en el ranking público y 0,915 en el privado, y aprendí dónde está el techo de un modelo que no entrena su encoder.</p>
+        <div class="meta"><span>23 oct 2026</span><span>14 min</span><span>9 experimentos</span></div>
+      </header>
+      <nav class="tabs" aria-label="Experimentos">
+        <a href="#resumen" data-tab="resumen">Resumen</a>
+        <a href="#datos" data-tab="datos">Datos</a>
+        <a href="#agregador" data-tab="agregador">Agregador</a>
+        <a href="#atencion" data-tab="atencion">Atención</a>
+        <a href="#perdida" data-tab="perdida">Pérdida y mezcla</a>
+        <a href="#encoder" data-tab="encoder">Entrenar el encoder</a>
+        <a href="#etiquetas" data-tab="etiquetas">Etiquetas</a>
+        <a href="#encoders" data-tab="encoders">Otros encoders</a>
+        <a href="#cierre" data-tab="cierre">Cierre</a>
+      </nav>
+
+      <section class="tab-panel" data-tab="resumen">
+        <p>La competencia pedía detectar 12 hallazgos en resonancias de rodilla: rotura del ligamento cruzado anterior, del colateral medial y de cada menisco, artrosis en tres compartimentos, derrame, sinovitis, quiste de Baker, contusión ósea y fractura. La métrica era el AUC promediado entre los 12.</p>
+        <p>Había 4.407 estudios para entrenar y solo 58 tenían etiquetas de radiólogos. El resto traía el informe en texto libre. La predicción corría en Kaggle, sin internet, con 9 horas para unos 1.300 estudios ocultos. Yo tenía una GPU T4 y 30 horas de cuota por semana.</p>
+        <p>Cada pestaña es un experimento: qué probé, por qué, la matemática justa, un fragmento de código y qué salió.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Puntaje de cada entrega</b><span>AUC en Kaggle</span></div>
+          <div class="demo-body">
+            <div class="btns" role="group" aria-label="Ranking"><button class="btn" type="button" id="sb-pub" aria-pressed="true">Público</button><button class="btn" type="button" id="sb-prv" aria-pressed="false">Privado</button></div>
+            <div class="rows" id="sb-rows"></div>
+            <div class="legend"><span><i class="sw"></i>ranking elegido</span><span><i class="ln"></i>el otro ranking</span><span>escala de 0,89 a 0,93</span></div>
+          </div>
+        </figure>
+        <p class="cap">El privado quedó unos 0,012 por debajo del público en todas las entregas, y el orden entre ellas se mantuvo.</p>
+        <h2>Tres lecciones</h2>
+        <ul class="plain">
+          <li>Con un encoder congelado, las mejoras del agregador suman de a 0,002. El límite estaba en los vectores de cada corte.</li>
+          <li>Una validación interna puede mentir. La autodestilación fue la mejor en mi validación y no mejoró en Kaggle.</li>
+          <li>Un modelo puede superar a sus propias etiquetas. En derrame y contusión, el modelo de imágenes le ganó al texto con el que se entrenó.</li>
+        </ul>
+        <p class="note" style="margin-top:34px"><a href="#datos">Siguiente: Datos y caché →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="datos" hidden>
+        <h2>De un estudio a bolsas de cortes</h2>
+        <p>Cada estudio trae varias series, y cada serie es una pila de cortes 2D en un plano: sagital, coronal o axial. En total eran 24.371 series, con una mediana de 30 cortes por serie y 512 píxeles de lado.</p>
+        <p>Agrupé las series en 6 casilleros fijos según el plano y si la secuencia resalta el líquido, que es donde se ven derrame y edema. Si un estudio tiene dos series para el mismo casillero, al entrenar elijo una al azar y al predecir uso la de más cortes.</p>
+        <figure class="diagram"><svg viewBox="0 0 640 100" role="img" aria-label="DICOM a Orientación a Espejo a 256 px a 6 casilleros"><rect x="0.0" y="18" width="107.2" height="64" rx="6"/><text x="53.6" y="46" text-anchor="middle">DICOM</text><text class="sm" x="53.6" y="66" text-anchor="middle">series del estudio</text><path d="M110.2 50 H128.2"/><path class="head" d="M132.2 50 l-7 -4 v8 z"/><rect x="133.2" y="18" width="107.2" height="64" rx="6"/><text x="186.8" y="46" text-anchor="middle">Orientación</text><text class="sm" x="186.8" y="66" text-anchor="middle">plano común</text><path d="M243.4 50 H261.4"/><path class="head" d="M265.4 50 l-7 -4 v8 z"/><rect x="266.4" y="18" width="107.2" height="64" rx="6"/><text x="320.0" y="46" text-anchor="middle">Espejo</text><text class="sm" x="320.0" y="66" text-anchor="middle">izquierda a derecha</text><path d="M376.6 50 H394.6"/><path class="head" d="M398.6 50 l-7 -4 v8 z"/><rect x="399.6" y="18" width="107.2" height="64" rx="6"/><text x="453.2" y="46" text-anchor="middle">256 px</text><text class="sm" x="453.2" y="66" text-anchor="middle">uint8 por serie</text><path d="M509.8 50 H527.8"/><path class="head" d="M531.8 50 l-7 -4 v8 z"/><rect class="hl" x="532.8" y="18" width="107.2" height="64" rx="6"/><text x="586.4" y="46" text-anchor="middle">6 casilleros</text><text class="sm" x="586.4" y="66" text-anchor="middle">plano y líquido</text></svg></figure>
+        <h2>Orientación y espejo</h2>
+        <p>Los equipos guardan las imágenes con orientaciones distintas. Con la geometría guardada en el DICOM reordeno cada serie a un mismo sistema de ejes, y además ordeno los cortes por su posición real. Así, en cada plano, filas, columnas y cortes apuntan siempre en la misma dirección anatómica.</p>
+        <p>Después espejo las rodillas izquierdas para que se vean como derechas. Con eso, en coronal y axial el compartimento medial queda siempre del mismo lado de la imagen, y el modelo no tiene que aprender dos versiones de cada lesión.</p>
+        <div class="code"><div class="code-head"><span>espejo.py</span><button class="btn" type="button" id="cp-datos">Copiar</button></div>
+<pre id="src-datos"><span class="k">def</span> orientar(vol, izquierda, plano):
+    <span class="c"># vol [cortes, alto, ancho] en orientación canónica</span>
+    <span class="k">if</span> izquierda <span class="k">and</span> plano == "Sagittal":
+        <span class="k">return</span> vol[::-1]          <span class="c"># invertir el orden de los cortes</span>
+    <span class="k">return</span> vol[:, :, ::-1] <span class="k">if</span> izquierda <span class="k">else</span> vol</pre></div>
+        <h2>Un caché para no leer DICOM dos veces</h2>
+        <p>Leer los 820 mil archivos DICOM es lento. Los procesé una sola vez, en cuatro notebooks de CPU en paralelo, y guardé cada serie a 256 píxeles en enteros de 8 bits, con un recorte de intensidad entre los percentiles 0,5 y 99,5. Quedó un caché de 54 GB que usaron todos los experimentos siguientes.</p>
+        <p class="note">En test no hay caché: el notebook de inferencia aplica el mismo código directo sobre los DICOM.</p>
+        <p class="note" style="margin-top:34px"><a href="#agregador">Siguiente: Encoder congelado y agregador →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="agregador" hidden>
+        <h2>Por qué congelar el encoder</h2>
+        <p>Entrenar una red de imágenes sobre 4.400 estudios, con cientos de cortes cada uno, no entraba en 30 horas semanales de T4. La alternativa fue usar una ResNet-50 preentrenada en RadImageNet, una base de 1,35 millones de imágenes médicas, y no tocarla. Cada corte entra a 224 píxeles y sale como un vector de 2048 números.</p>
+        <p>Calculé esos vectores una vez para los 819.078 cortes. Todo lo que vino después se entrena sobre ellos, en CPU, sin gastar GPU.</p>
+        <figure class="diagram"><svg viewBox="0 0 640 100" role="img" aria-label="Corte 224 px a ResNet-50 a Vector h a Agregador a 12 salidas"><rect x="0.0" y="18" width="107.2" height="64" rx="6"/><text x="53.6" y="46" text-anchor="middle">Corte 224 px</text><text class="sm" x="53.6" y="66" text-anchor="middle">gris en 3 canales</text><path d="M110.2 50 H128.2"/><path class="head" d="M132.2 50 l-7 -4 v8 z"/><rect x="133.2" y="18" width="107.2" height="64" rx="6"/><text x="186.8" y="46" text-anchor="middle">ResNet-50</text><text class="sm" x="186.8" y="66" text-anchor="middle">congelada</text><path d="M243.4 50 H261.4"/><path class="head" d="M265.4 50 l-7 -4 v8 z"/><rect x="266.4" y="18" width="107.2" height="64" rx="6"/><text x="320.0" y="46" text-anchor="middle">Vector h</text><text class="sm" x="320.0" y="66" text-anchor="middle">2048 números</text><path d="M376.6 50 H394.6"/><path class="head" d="M398.6 50 l-7 -4 v8 z"/><rect class="hl" x="399.6" y="18" width="107.2" height="64" rx="6"/><text x="453.2" y="46" text-anchor="middle">Agregador</text><text class="sm" x="453.2" y="66" text-anchor="middle">0,7 M parámetros</text><path d="M509.8 50 H527.8"/><path class="head" d="M531.8 50 l-7 -4 v8 z"/><rect x="532.8" y="18" width="107.2" height="64" rx="6"/><text x="586.4" y="46" text-anchor="middle">12 salidas</text><text class="sm" x="586.4" y="66" text-anchor="middle">una por hallazgo</text></svg></figure>
+        <h2>Aprender de una bolsa de cortes</h2>
+        <p>Cada estudio tiene una sola etiqueta para muchos cortes. Ese planteo se llama aprendizaje de instancias múltiples: el modelo tiene que descubrir qué cortes importan. Lo resolví con atención con compuertas, en dos niveles. Primero resume los cortes de cada serie, después las series del estudio.</p>
+        <div class="formula">
+          <i>a<sub>k</sub></i> = <i>w</i><sup>⊤</sup> ( tanh(<i>V h<sub>k</sub></i>) ⊙ σ(<i>U h<sub>k</sub></i>) )<br>
+          <i>α<sub>k</sub></i> = <span class="frac"><span>exp(<i>a<sub>k</sub></i>)</span><span>Σ<sub>j</sub> exp(<i>a<sub>j</sub></i>)</span></span>
+          &nbsp;&nbsp; <i>z</i> = Σ<sub>k</sub> <i>α<sub>k</sub> h<sub>k</sub></i>
+        </div>
+        <p>Cada corte <i>h<sub>k</sub></i> recibe un puntaje <i>a<sub>k</sub></i>. La rama con tanh decide qué contenido es relevante y la rama sigmoide funciona como compuerta. El softmax convierte los puntajes en pesos <i>α<sub>k</sub></i> que suman 1, y el resumen <i>z</i> es el promedio ponderado.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Simulador de atención</b><span>8 cortes de una serie</span></div>
+          <div class="demo-body">
+            <p class="sub2">Cortes donde se ve la lesión (tocar para cambiar)</p>
+            <div class="chips" id="at-chips"></div>
+            <label class="ctl" for="at-b"><span>Nitidez</span><input type="range" id="at-b" min="0" max="5" step="0.1" value="2.5"><output id="at-bo"></output></label>
+            <div class="rows" id="at-rows"></div>
+            <div class="readout"><span>Evidencia con atención <b id="at-att"></b></span><span>Con promedio simple <b id="at-avg"></b></span></div>
+          </div>
+        </figure>
+        <p class="cap">La nitidez multiplica los puntajes antes del softmax. En cero, la atención es un promedio simple y la lesión se diluye entre los cortes sanos. Al subirla, el peso se concentra en los cortes con lesión.</p>
+        <div class="code"><div class="code-head"><span>atencion.py</span><button class="btn" type="button" id="cp-att">Copiar</button></div>
+<pre id="src-att"><span class="k">class</span> GatedAttnPool(nn.Module):
+    <span class="k">def</span> __init__(self, dim, heads=1):
+        super().__init__()
+        self.v, self.u = nn.Linear(dim, dim // 2), nn.Linear(dim, dim // 2)
+        self.w = nn.Linear(dim // 2, heads)
+
+    <span class="k">def</span> forward(self, x, mask):  <span class="c"># x [..., L, D]</span>
+        a = self.w(torch.tanh(self.v(x)) * torch.sigmoid(self.u(x)))
+        a = a.masked_fill(~mask[..., None], -1e4).softmax(-2)
+        <span class="k">return</span> torch.einsum("...lh,...ld->...hd", a, x), a</pre></div>
+        <h2>Etiquetas suaves</h2>
+        <p>Las etiquetas salieron de leer cada informe con un modelo de lenguaje, que devolvía una probabilidad por hallazgo. Un informe que dice "probable rotura" da algo cerca de 0,8. Entrené con entropía cruzada sobre esas probabilidades, y los 58 estudios con verdad pesan el triple.</p>
+        <div class="formula"><i>L</i> = − <span class="frac"><span>1</span><span><i>N</i></span></span> Σ<sub>i</sub> <i>w<sub>i</sub></i> Σ<sub>c</sub> [ <i>y<sub>ic</sub></i> log <i>p<sub>ic</sub></i> + (1 − <i>y<sub>ic</sub></i>) log(1 − <i>p<sub>ic</sub></i>) ]</div>
+        <h2>Resultado</h2>
+        <p>Con 30 épocas, la primera versión dio 0,917 en Kaggle. La validación por época mostraba que el modelo llegaba a su mejor punto cerca de la época 7 y después memorizaba el ruido de las etiquetas. Con 10 épocas subió a 0,920. Para no hacer trampa, siempre usé la última época de un calendario fijo, sin elegir la mejor mirando la validación.</p>
+        <p class="note" style="margin-top:34px"><a href="#atencion">Siguiente: Atención por hallazgo →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="atencion" hidden>
+        <h2>Una atención compartida hace competir a los hallazgos</h2>
+        <p>En la versión anterior, la atención sobre los cortes era una sola para los 12 hallazgos. Pero cada lesión vive en lugares distintos. Una rotura del cruzado anterior se ve en dos o tres cortes sagitales del centro de la rodilla, y la artrosis en los cortes de los compartimentos. Con una atención compartida, esos cortes compiten por el mismo peso.</p>
+        <p>La solución fue darle a cada hallazgo <i>c</i> su propio juego de pesos sobre los cortes, y después su propia atención sobre las series.</p>
+        <div class="formula"><i>α<sub>k</sub><sup>(c)</sup></i> = softmax<sub>k</sub>( <i>w<sub>c</sub></i><sup>⊤</sup> ( tanh(<i>V h<sub>k</sub></i>) ⊙ σ(<i>U h<sub>k</sub></i>) ) ) &nbsp;&nbsp; <i>z<sup>(c)</sup></i> = Σ<sub>k</sub> <i>α<sub>k</sub><sup>(c)</sup> h<sub>k</sub></i></div>
+        <p>Las matrices <i>V</i> y <i>U</i> se comparten. Solo cambia el vector <i>w<sub>c</sub></i>, así que el costo es mínimo: el agregador sigue en unos 0,73 millones de parámetros.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Compartida contra por hallazgo</b><span>10 cortes coronales</span></div>
+          <div class="demo-body">
+            <div class="btns" role="group" aria-label="Modo"><button class="btn" type="button" id="ph-sh" aria-pressed="true">Atención compartida</button><button class="btn" type="button" id="ph-pl" aria-pressed="false">Una por hallazgo</button></div>
+            <p class="sub2">Pesos para el cruzado anterior (lesión en los cortes 5 y 6)</p>
+            <div class="rows" id="ph-a"></div>
+            <p class="sub2">Pesos para la artrosis (lesión en los cortes 1, 2, 9 y 10)</p>
+            <div class="rows" id="ph-o"></div>
+            <div class="readout"><span>Evidencia cruzado <b id="ph-ea"></b></span><span>Evidencia artrosis <b id="ph-eo"></b></span></div>
+          </div>
+        </figure>
+        <p class="cap">Con una sola atención, el peso se reparte entre los seis cortes relevantes para alguno de los dos hallazgos, y cada uno recibe una parte de su evidencia. Con una por hallazgo, cada uno se queda con la suya.</p>
+        <div class="code"><div class="code-head"><span>por_hallazgo.py</span><button class="btn" type="button" id="cp-pl">Copiar</button></div>
+<pre id="src-pl"><span class="c"># antes: una cabeza para los 12 hallazgos</span>
+slice_pool = GatedAttnPool(256, heads=1)
+<span class="c"># después: una cabeza por hallazgo, cada uno arma su resumen de la serie</span>
+slice_pool = GatedAttnPool(256, heads=12)   <span class="c"># [B, S, 12, D]</span>
+s = series_mlp(s + slot_emb[:, None, :])
+z, _ = LabelSeriesPool(256, heads=12)(s, series_mask)  <span class="c"># [B, 12, D]</span></pre></div>
+        <h2>Resultado</h2>
+        <p>En validación cruzada sobre los 4.349 estudios débiles, el cambio subió de 0,892 a 0,897. Le sumé un promedio exponencial de los pesos, que casi no movió nada. Mezclado con la versión anterior, el ranking público pasó de 0,920 a 0,927, el salto más grande del proyecto.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Cambio por hallazgo</b><span>v1.3 menos v1.1, validación cruzada</span></div>
+          <div class="demo-body"><div class="rows" id="d13-rows"></div>
+            <div class="legend"><span><i class="ln"></i>cero</span><span>escala de −0,006 a +0,014</span></div></div>
+        </figure>
+        <p class="cap">Mejoró en 11 de 12 hallazgos. Los que más subieron dependen de pocos cortes o de una zona puntual, como el quiste de Baker.</p>
+        <p class="note" style="margin-top:34px"><a href="#perdida">Siguiente: Pérdida AUC, semillas y mezcla →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="perdida" hidden>
+        <h2>Qué mide el AUC</h2>
+        <p>El AUC es la probabilidad de que un estudio positivo elegido al azar reciba un puntaje mayor que uno negativo. Solo mira el orden, nunca el valor de la probabilidad.</p>
+        <div class="formula">AUC = <i>P</i>( <i>s</i><sub>+</sub> &gt; <i>s</i><sub>−</sub> ) = <span class="frac"><span>pares bien ordenados</span><span>positivos × negativos</span></span></div>
+        <figure class="demo">
+          <div class="demo-head"><b>Simulador de AUC</b><span>6 positivos y 6 negativos</span></div>
+          <div class="demo-body">
+            <label class="ctl" for="au-s"><span>Separación</span><input type="range" id="au-s" min="-1" max="3" step="0.05" value="0.6"><output id="au-so"></output></label>
+            <p class="sub2">Positivos</p><div class="rows" id="au-p"></div>
+            <p class="sub2">Negativos</p><div class="rows" id="au-n"></div>
+            <div class="readout"><span>Pares bien ordenados <b id="au-ok"></b></span><span>AUC <b id="au-v"></b></span><span>Pérdida por pares <b id="au-l"></b></span></div>
+          </div>
+        </figure>
+        <p class="cap">Al separar los puntajes, el AUC sube de a escalones, cada vez que un par cambia de orden. La pérdida por pares baja de forma continua, y por eso se puede optimizar con gradientes.</p>
+        <h2>Una pérdida que se parece al AUC</h2>
+        <p>La entropía cruzada empuja cada predicción hacia su etiqueta, estudio por estudio. Le agregué una pérdida que mira pares: para cada hallazgo, castiga los pares en que un negativo queda por encima de un positivo. Con etiquetas suaves, el par pesa <i>y<sub>i</sub></i>(1 − <i>y<sub>j</sub></i>), así un par dudoso cuenta poco.</p>
+        <div class="formula"><i>L</i><sub>pares</sub> = <span class="frac"><span>Σ<sub>i,j</sub> <i>y<sub>i</sub></i>(1 − <i>y<sub>j</sub></i>) log(1 + e<sup><i>s<sub>j</sub></i> − <i>s<sub>i</sub></i></sup>)</span><span>Σ<sub>i,j</sub> <i>y<sub>i</sub></i>(1 − <i>y<sub>j</sub></i>)</span></span> &nbsp;&nbsp; <i>L</i> = <i>L</i><sub>BCE</sub> + 0,5 · <i>L</i><sub>pares</sub></div>
+        <div class="code"><div class="code-head"><span>perdida_auc.py</span><button class="btn" type="button" id="cp-auc">Copiar</button></div>
+<pre id="src-auc"><span class="k">def</span> pairwise_auc_loss(logits, y):
+    d = logits[None, :, :] - logits[:, None, :]   <span class="c"># s_j - s_i</span>
+    w = y[:, None, :] * (1 - y[None, :, :])       <span class="c"># y_i (1 - y_j)</span>
+    num = (F.softplus(d) * w).sum((0, 1))
+    den = w.sum((0, 1))
+    ok = den > 1e-3
+    <span class="k">return</span> (num[ok] / den[ok]).mean()</pre></div>
+        <p>Subió la validación de 0,897 a 0,899, sin tocar las etiquetas ni la arquitectura.</p>
+        <h2>Semillas</h2>
+        <p>Cada entrenamiento tiene azar: la inicialización, el orden de los lotes y qué cortes se eligen. Entrené cada modelo con tres semillas y promedié. Lo que el modelo aprendió de verdad se repite en las tres, y los errores de azar se compensan.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Una semilla contra tres</b><span>validación cruzada, 4.349 estudios</span></div>
+          <div class="demo-body"><div class="rows" id="sd-rows"></div><div class="legend"><span>escala de 0,880 a 0,905</span></div></div>
+        </figure>
+        <h2>Mezcla por rangos</h2>
+        <p>Como el AUC solo mira el orden, dos modelos se mezclan promediando su percentil por hallazgo, sin calibrar probabilidades. La entrega final promedia v1.1 y v1.4 con pérdida por pares, tres semillas cada uno: 30 agregadores que corren en 5 segundos.</p>
+        <div class="code"><div class="code-head"><span>mezcla.py</span><button class="btn" type="button" id="cp-rank">Copiar</button></div>
+<pre id="src-rank">rank = <span class="k">lambda</span> p: pd.DataFrame(p).rank(pct=True).to_numpy()
+p_v11 = np.mean([predecir(d) <span class="k">for</span> d <span class="k">in</span> V11_SEMILLAS], 0)
+p_auc = np.mean([predecir(d) <span class="k">for</span> d <span class="k">in</span> AUC_SEMILLAS], 0)
+final = (rank(p_v11) + rank(p_auc)) / 2</pre></div>
+        <p>En validación, la mezcla final llegó a 0,902. En Kaggle quedó en 0,927, igual que v1.3. El ranking público se calcula sobre una parte de los 1.300 estudios ocultos, y no alcanza para ver diferencias de 0,002.</p>
+        <p class="note" style="margin-top:34px"><a href="#encoder">Siguiente: Entrenar el encoder →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="encoder" hidden>
+        <h2>Afinar la última capa</h2>
+        <p>Si el límite estaba en los vectores, lo natural era dejar que el encoder aprendiera. Primero probé lo más barato: congelar todo salvo el último bloque de la ResNet y entrenarlo junto con el agregador. En el fold 0, la validación pasó de 0,8828 a 0,8835, una diferencia de 0,0007 en 49 minutos de GPU.</p>
+        <h2>Un encoder moderno, entrenado completo</h2>
+        <p>Después entrené un ConvNeXt V2 Tiny de punta a punta, en 2.5D: cada corte entra con sus dos vecinos como canales, así la red ve un poco del volumen alrededor.</p>
+        <figure class="diagram"><svg viewBox="0 0 640 100" role="img" aria-label="Corte k−1 a Corte k a Corte k+1 a ConvNeXt V2 a Agregador"><rect x="0.0" y="18" width="107.2" height="64" rx="6"/><text x="53.6" y="46" text-anchor="middle">Corte k−1</text><text class="sm" x="53.6" y="66" text-anchor="middle">canal 1</text><path d="M110.2 50 H128.2"/><path class="head" d="M132.2 50 l-7 -4 v8 z"/><rect x="133.2" y="18" width="107.2" height="64" rx="6"/><text x="186.8" y="46" text-anchor="middle">Corte k</text><text class="sm" x="186.8" y="66" text-anchor="middle">canal 2</text><path d="M243.4 50 H261.4"/><path class="head" d="M265.4 50 l-7 -4 v8 z"/><rect x="266.4" y="18" width="107.2" height="64" rx="6"/><text x="320.0" y="46" text-anchor="middle">Corte k+1</text><text class="sm" x="320.0" y="66" text-anchor="middle">canal 3</text><path d="M376.6 50 H394.6"/><path class="head" d="M398.6 50 l-7 -4 v8 z"/><rect class="hl" x="399.6" y="18" width="107.2" height="64" rx="6"/><text x="453.2" y="46" text-anchor="middle">ConvNeXt V2</text><text class="sm" x="453.2" y="66" text-anchor="middle">entrenable, 28 M</text><path d="M509.8 50 H527.8"/><path class="head" d="M531.8 50 l-7 -4 v8 z"/><rect x="532.8" y="18" width="107.2" height="64" rx="6"/><text x="586.4" y="46" text-anchor="middle">Agregador</text><text class="sm" x="586.4" y="66" text-anchor="middle">desde cero</text></svg></figure>
+        <div class="code"><div class="code-head"><span>vecinos_25d.py</span><button class="btn" type="button" id="cp-25d">Copiar</button></div>
+<pre id="src-25d"><span class="c"># índices de los cortes elegidos y sus vecinos, recortados a los bordes</span>
+kk = np.clip(k[:, <span class="k">None</span>] + np.array([-1, 0, 1]), 0, n - 1)   <span class="c"># [L, 3]</span>
+vol = volumen[kk.ravel()].reshape(len(k), 3, H, W)      <span class="c"># 3 canales por corte</span></pre></div>
+        <figure class="demo">
+          <div class="demo-head"><b>ConvNeXt V2 por época</b><span>fold 0, 882 estudios</span></div>
+          <div class="demo-body">
+            <div class="btns" role="group" aria-label="Cortes"><button class="btn" type="button" id="cx-16" aria-pressed="true">16 cortes</button><button class="btn" type="button" id="cx-24" aria-pressed="false">24 cortes</button></div>
+            <div class="rows" id="cx-rows"></div>
+            <div class="legend"><span><i class="ln"></i>modelo congelado en los mismos estudios</span><span>escala de 0,74 a 0,90</span></div>
+          </div>
+        </figure>
+        <p>Con 16 cortes por serie y 5 épocas terminó en 0,844, contra 0,884 del modelo congelado. La curva seguía subiendo. Pensé que faltaban los cortes de los bordes, donde están el menisco lateral y el colateral medial, y repetí con 24. Un error mío al estimar el tiempo cortó esa corrida en 3 épocas, pero alcanzó para ver que los hallazgos laterales seguían igual de mal.</p>
+        <p class="note">Mezclado con el modelo congelado sumaba 0,003 en validación. No justificaba las 16 horas de GPU que costaban los otros cuatro folds.</p>
+        <h2>Por qué no alcanzó</h2>
+        <p>El ConvNeXt partía de ImageNet, fotos comunes, y tenía 3.500 estudios para aprender a mirar resonancias. RadImageNet ya traía más de un millón de imágenes médicas vistas. Para que un encoder entrenado supere a uno médico congelado hacen falta más datos, más resolución o más épocas, y las tres cosas cuestan GPU.</p>
+        <p class="note" style="margin-top:34px"><a href="#etiquetas">Siguiente: Las etiquetas →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="etiquetas" hidden>
+        <h2>El modelo supera a su etiqueta</h2>
+        <p>Las etiquetas de entrenamiento tienen un AUC de 0,888 contra los 58 estudios con verdad. Comparé hallazgo por hallazgo esas etiquetas con las predicciones del modelo final.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Modelo contra etiqueta</b><span>58 estudios con verdad</span></div>
+          <div class="demo-body">
+            <div class="btns" role="group" aria-label="Orden"><button class="btn" type="button" id="gd-name" aria-pressed="true">Orden original</button><button class="btn" type="button" id="gd-diff" aria-pressed="false">Por diferencia</button></div>
+            <div class="rows" id="gd-rows"></div>
+            <div class="legend"><span><i class="sw"></i>gana el modelo de imágenes</span><span><i class="ln"></i>etiqueta del modelo de lenguaje</span><span>escala de 0,70 a 1,00</span></div>
+            <div class="readout"><span>El modelo gana en <b id="gd-win"></b> de 12</span><span>Promedio modelo <b id="gd-m"></b></span><span>Promedio etiqueta <b id="gd-j"></b></span></div>
+          </div>
+        </figure>
+        <p>En derrame, contusión y artrosis, el modelo le gana a la etiqueta. Los informes son ambiguos en esos hallazgos, y al promediar miles de estudios el error de cada informe se compensa. En ligamentos y meniscos el informe es claro y la imagen no alcanza.</p>
+        <p class="note">Con 9 a 35 positivos por hallazgo, diferencias menores a unos 0,05 pueden ser ruido. El patrón por grupos sí es consistente.</p>
+        <h2>Mejores etiquetas no ayudaron</h2>
+        <p>Probé dos veces promediar las etiquetas con otro etiquetador: uno propio, con otro modelo de lenguaje, y el mejor de 33 archivos públicos de otros participantes, que en los 58 estudios llegaba a 0,899. Ninguno mejoró. Si el modelo ya aprende a pesar del ruido, cambiar la etiqueta aporta poco.</p>
+        <h2>La autodestilación y su filtración</h2>
+        <p>La autodestilación entrena un modelo nuevo con un objetivo mezclado: la mitad es la etiqueta y la mitad es la predicción del ensamble.</p>
+        <div class="formula"><i>ỹ<sub>i</sub></i> = 0,5 · <i>y<sub>i</sub></i> + 0,5 · <i>p</i><sub><i>i</i></sub><sup>maestro</sup></div>
+        <p>Usé predicciones fuera de fold: cada estudio fue predicho por un modelo que no lo vio. Parecía seguro, pero hay una fuga indirecta. Para validar en el fold 1, el alumno entrena con objetivos de los folds 2 a 5, y esos objetivos los generaron maestros que sí habían entrenado con el fold 1.</p>
+        <figure class="diagram"><svg viewBox="0 0 640 170" role="img" aria-label="El maestro vio el fold de validación del alumno">
+          <rect x="0" y="20" width="190" height="56" rx="6"/><text x="95" y="44" text-anchor="middle">Maestro</text><text class="sm" x="95" y="62" text-anchor="middle">entrenó con folds 1, 3, 4, 5</text>
+          <rect x="225" y="20" width="190" height="56" rx="6"/><text x="320" y="44" text-anchor="middle">Objetivo del fold 2</text><text class="sm" x="320" y="62" text-anchor="middle">predicción del maestro</text>
+          <rect x="450" y="20" width="190" height="56" rx="6"/><text x="545" y="44" text-anchor="middle">Alumno</text><text class="sm" x="545" y="62" text-anchor="middle">entrena con 2, 3, 4, 5</text>
+          <rect class="hl" x="450" y="104" width="190" height="56" rx="6"/><text x="545" y="128" text-anchor="middle">Validación</text><text class="sm" x="545" y="146" text-anchor="middle">fold 1</text>
+          <path d="M193 48 H218"/><path class="head" d="M222 48 l-7 -4 v8 z"/>
+          <path d="M418 48 H443"/><path class="head" d="M447 48 l-7 -4 v8 z"/>
+          <path d="M95 79 V132 H443"/><path class="head" d="M447 132 l-7 -4 v8 z"/>
+          <text class="sm" x="270" y="124" text-anchor="middle">el fold 1 llegó al alumno a través del maestro</text>
+        </svg></figure>
+        <p>La validación subió a 0,902, la mejor de todas, y en Kaggle dio 0,926. El ranking, que no tiene esta fuga, confirmó que la mejora era falsa.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Todas las variantes del agregador</b><span>validación cruzada, mismos estudios</span></div>
+          <div class="demo-body">
+            <div class="btns" role="group" aria-label="Referencia"><button class="btn" type="button" id="of-w" aria-pressed="true">4.349 débiles</button><button class="btn" type="button" id="of-g" aria-pressed="false">58 con verdad</button></div>
+            <div class="rows" id="of-rows"></div>
+            <div class="legend"><span><i class="ln"></i>v1.1, la base</span><span>escala de 0,86 a 0,92</span></div>
+          </div>
+        </figure>
+        <p class="note" style="margin-top:34px"><a href="#encoders">Siguiente: Otros encoders →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="encoders" hidden>
+        <h2>Una sonda lineal para comparar encoders</h2>
+        <p>Probar un encoder nuevo completo cuesta horas de GPU. Para decidir antes, armé una prueba chica: 240 estudios, hasta 16 cortes por serie y los mismos cortes para todas las variantes. Por estudio, guardo la media y el máximo de los vectores de cada casillero, y entreno una regresión logística con validación cruzada de 5 folds. No es el AUC final, sirve para comparar.</p>
+        <figure class="diagram"><svg viewBox="0 0 640 100" role="img" aria-label="240 estudios a Encoder a Media y máximo a Regresión a AUC macro"><rect x="0.0" y="18" width="107.2" height="64" rx="6"/><text x="53.6" y="46" text-anchor="middle">240 estudios</text><text class="sm" x="53.6" y="66" text-anchor="middle">mismos cortes</text><path d="M110.2 50 H128.2"/><path class="head" d="M132.2 50 l-7 -4 v8 z"/><rect class="hl" x="133.2" y="18" width="107.2" height="64" rx="6"/><text x="186.8" y="46" text-anchor="middle">Encoder</text><text class="sm" x="186.8" y="66" text-anchor="middle">la variante</text><path d="M243.4 50 H261.4"/><path class="head" d="M265.4 50 l-7 -4 v8 z"/><rect x="266.4" y="18" width="107.2" height="64" rx="6"/><text x="320.0" y="46" text-anchor="middle">Media y máximo</text><text class="sm" x="320.0" y="66" text-anchor="middle">por casillero</text><path d="M376.6 50 H394.6"/><path class="head" d="M398.6 50 l-7 -4 v8 z"/><rect x="399.6" y="18" width="107.2" height="64" rx="6"/><text x="453.2" y="46" text-anchor="middle">Regresión</text><text class="sm" x="453.2" y="66" text-anchor="middle">logística, 5 folds</text><path d="M509.8 50 H527.8"/><path class="head" d="M531.8 50 l-7 -4 v8 z"/><rect x="532.8" y="18" width="107.2" height="64" rx="6"/><text x="586.4" y="46" text-anchor="middle">AUC macro</text><text class="sm" x="586.4" y="66" text-anchor="middle">comparable</text></svg></figure>
+        <h2>MedSigLIP</h2>
+        <p>MedSigLIP es el encoder visual de MedGemma, de Google: un transformer de unos 400 millones de parámetros entrenado con imágenes médicas y sus informes. Lo probé con el caché ampliado a 448 píxeles, con el caché a 224 y con los DICOM originales leídos a 448, para ver si la resolución perdida en el caché importaba.</p>
+        <h2>Pirámides de features</h2>
+        <p>Las redes de detección combinan capas tempranas, con detalle local, y capas profundas, con semántica. Sobre la misma ResNet probé una capa intermedia (L3), grillas espaciales (SPP), un zoom al centro de la rodilla (Z160 y Z128) y la imagen ampliada a 320 píxeles.</p>
+        <div class="code"><div class="code-head"><span>zoom.py</span><button class="btn" type="button" id="cp-zoom">Copiar</button></div>
+<pre id="src-zoom"><span class="k">def</span> mapas(x, recorte=<span class="k">None</span>, lado=224):
+    <span class="k">if</span> recorte:                                  <span class="c"># zoom central</span>
+        o = (x.shape[-1] - recorte) // 2
+        x = x[..., o:o + recorte, o:o + recorte]
+    x = F.interpolate(x, size=(lado, lado), mode="bilinear", antialias=True)
+    m3 = layer3(stem(normalizar(x)))
+    <span class="k">return</span> m3, layer4(m3)</pre></div>
+        <figure class="demo">
+          <div class="demo-head"><b>Resultados de las dos pruebas</b><span>sonda lineal, 240 estudios</span></div>
+          <div class="demo-body">
+            <div class="btns" role="group" aria-label="Prueba"><button class="btn" type="button" id="ex-msl" aria-pressed="true">MedSigLIP</button><button class="btn" type="button" id="ex-pyr" aria-pressed="false">Pirámides</button></div>
+            <div class="rows" id="ex-rows"></div>
+            <div class="readout"><span id="ex-note"></span></div>
+          </div>
+        </figure>
+        <p class="cap">Las dos pruebas usan sondas distintas, así que sus números no se comparan entre sí. Dentro de cada una, todas las variantes ven los mismos estudios y cortes.</p>
+        <p>RadImageNet le ganó a MedSigLIP por unos 0,06, y leer los DICOM originales no ayudó. A 448 píxeles, MedSigLIP procesaba 13,1 imágenes por segundo en la T4, unas 17 horas para todos los cortes. En las pirámides, solo sumar el zoom a la vista completa superó al vector actual, por 0,010, dentro del margen de ruido de una prueba con 240 estudios.</p>
+        <p class="note" style="margin-top:34px"><a href="#cierre">Siguiente: Cierre →</a></p>
+      </section>
+
+      <section class="tab-panel" data-tab="cierre" hidden>
+        <h2>Dónde quedó el techo</h2>
+        <p>Terminé en 0,927 en el ranking público, puesto 3.995 de 6.425 equipos, y 0,915 en el privado. El primero del público tenía 0,970 y la mediana era 0,942.</p>
+        <p>Todas las mejoras del agregador tocaban cómo se combinan los vectores de cada corte, y el límite estaba en esos vectores. Una ResNet congelada a 224 píxeles no distingue bien una rotura de menisco que aparece en dos cortes de treinta.</p>
+        <h2>Qué hicieron los primeros</h2>
+        <p>Leí los notebooks públicos que llegaban a 0,95. Comparten la base con lo que hice: cortes vecinos como canales, atención por hallazgo y mezcla por rangos. La diferencia está en cuánta información recibe el encoder y en que lo entrenan.</p>
+        <ul class="plain">
+          <li>Recortan 140 mm alrededor de la articulación usando el tamaño real del píxel, y trabajan a 384 píxeles.</li>
+          <li>Agregan vistas ampliadas de cada compartimento: central, patelofemoral, posterior, medial y lateral.</li>
+          <li>Entrenan el encoder con tareas auxiliares sobre otras bases, como cajas de lesiones de fastMRI+.</li>
+          <li>Usan mucha más GPU que una T4, y varios parten de pesos entrenados con OAI, una base externa cuyo uso el organizador nunca terminó de aclarar.</li>
+        </ul>
+        <h2>Bitácora</h2>
+        <p>Cada fila es un notebook o una entrega en Kaggle. Los notebooks son privados.</p>
+        <div class="wrap"><table class="cmp log">
+          <tbody>
+            <tr><td>08 oct</td><td>Exploración de los datos, censo de las 24.371 series y elección del formato del caché.</td></tr>
+            <tr><td>08 oct</td><td>Caché de 256 píxeles en cuatro partes en paralelo, consolidación y control de calidad.</td></tr>
+            <tr><td>08 oct</td><td>Vectores de RadImageNet para los 819.078 cortes.</td></tr>
+            <tr><td>10 oct</td><td>Agregador v1 con 5 folds y primera entrega: 0,917 en el público.</td></tr>
+            <tr><td>10 oct</td><td>v1.1, el mismo modelo con 10 épocas: 0,920.</td></tr>
+            <tr><td>11 oct</td><td>Afinar la última capa de la ResNet: 0,0007 de mejora en validación. Descartado.</td></tr>
+            <tr><td>11 oct</td><td>ConvNeXt V2 entrenado completo con 16 y 24 cortes: 0,844 contra 0,884 del congelado.</td></tr>
+            <tr><td>12 oct</td><td>v1.2 con etiquetas promediadas con otro modelo de lenguaje: peor en los 58 estudios con verdad.</td></tr>
+            <tr><td>12 oct</td><td>v1.3, atención por hallazgo sobre los cortes: 0,927 mezclada con v1.1.</td></tr>
+            <tr><td>13 oct</td><td>v1.4 en paralelo: autodestilación (0,926) y pérdida por pares (0,927).</td></tr>
+            <tr><td>13 oct</td><td>Dos semillas más por modelo y entrega v1.5 con 30 agregadores: 0,927.</td></tr>
+            <tr><td>13 oct</td><td>MedSigLIP contra RadImageNet en una sonda lineal: 0,742 contra 0,800.</td></tr>
+            <tr><td>13 oct</td><td>Revisión de 33 archivos de etiquetas públicas y v1.6 con la mejor: sin mejora.</td></tr>
+            <tr><td>13 oct</td><td>Pirámides de features sobre RadImageNet: solo el zoom junto a la vista completa da una señal débil.</td></tr>
+            <tr><td>22 oct</td><td>Cierre de la competencia: 0,915 en el ranking privado.</td></tr>
+          </tbody>
+        </table></div>
+        <h2>Notas</h2>
+        <ul class="plain">
+          <li>Encoder: ResNet-50 con los pesos públicos de RadImageNet. MedSigLIP 448 de Google, bajo los términos de Health AI Developer Foundations.</li>
+          <li>Etiquetas: extraídas de los informes con un modelo de lenguaje. De los 33 archivos públicos de etiquetas que revisé, 8 copiaban las etiquetas reales de los 58 estudios y no se podían evaluar.</li>
+          <li>Validación: los paneles usan predicciones fuera de fold, sobre los mismos estudios. Contra etiquetas débiles, el AUC queda comprimido por el ruido.</li>
+          <li>Pendiente: entrenar el encoder con recortes anatómicos a 384 píxeles.</li>
+        </ul>
+      </section>
+
+      <p class="foot">Enrique Paiva · Think Paraguayo · <a href="../../index.html">Todos los posts</a></p>
+    </article>
+  </div>
+</div>
+<script src="../../assets/site.js?v=3"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id), D = {"subs": [{"n": "v1", "pub": 0.917, "prv": 0.9}, {"n": "v1.1", "pub": 0.92, "prv": 0.907}, {"n": "v1.3", "pub": 0.927, "prv": 0.915}, {"n": "v1.4 destil.", "pub": 0.926, "prv": 0.913}, {"n": "v1.4 AUC", "pub": 0.927, "prv": 0.915}, {"n": "v1.5", "pub": 0.927, "prv": 0.915}], "gold": [{"label": "ACL", "pos": 24, "jev": 0.987, "model": 0.956}, {"label": "MCL", "pos": 9, "jev": 0.961, "model": 0.902}, {"label": "Medial Meniscus", "pos": 26, "jev": 0.954, "model": 0.919}, {"label": "Lateral Meniscus", "pos": 23, "jev": 0.894, "model": 0.839}, {"label": "Medial OA", "pos": 15, "jev": 0.924, "model": 0.984}, {"label": "Lateral OA", "pos": 11, "jev": 0.803, "model": 0.912}, {"label": "PF OA", "pos": 21, "jev": 0.919, "model": 0.824}, {"label": "Effusion", "pos": 35, "jev": 0.835, "model": 0.952}, {"label": "Synovitis", "pos": 27, "jev": 0.757, "model": 0.79}, {"label": "Baker's", "pos": 12, "jev": 0.894, "model": 0.934}, {"label": "Contusion", "pos": 19, "jev": 0.804, "model": 0.919}, {"label": "Fracture", "pos": 18, "jev": 0.921, "model": 0.949}], "oof": [{"name": "v1", "weak": 0.8756, "gold": 0.8783}, {"name": "v1.1", "weak": 0.892, "gold": 0.8969}, {"name": "v1.2 Perplexity", "weak": 0.891, "gold": 0.89}, {"name": "v1.3 atención", "weak": 0.8966, "gold": 0.8961}, {"name": "v1.4 AUC", "weak": 0.899, "gold": 0.905}, {"name": "v1.4 destilación", "weak": 0.9025, "gold": 0.9145}, {"name": "v1.6 flight0234", "weak": 0.8942, "gold": 0.9039}, {"name": "v1.1 + v1.3", "weak": 0.899, "gold": 0.901}, {"name": "v1.5 final", "weak": 0.9016, "gold": 0.905}], "msl": [{"n": "RadImageNet", "v": 0.8002}, {"n": "MedSigLIP 448", "v": 0.7416}, {"n": "MedSigLIP DICOM", "v": 0.7378}, {"n": "MedSigLIP 224", "v": 0.7357}], "pyr": [{"n": "L4+Z160", "v": 0.7918}, {"n": "L4", "v": 0.7821}, {"n": "L4+L3", "v": 0.7778}, {"n": "SPP-LR", "v": 0.7764}, {"n": "Z160", "v": 0.7697}, {"n": "L4@320", "v": 0.7607}, {"n": "SPP-2x2", "v": 0.7568}, {"n": "Z128", "v": 0.7485}, {"n": "L3", "v": 0.7176}], "c16": [{"ep": 0, "weak": 0.7561, "v11": 0.8845}, {"ep": 1, "weak": 0.8029, "v11": 0.8845}, {"ep": 2, "weak": 0.8293, "v11": 0.8845}, {"ep": 3, "weak": 0.8419, "v11": 0.8845}, {"ep": 4, "weak": 0.8442, "v11": 0.8845}], "c24": [{"ep": 0, "weak": 0.7654, "v11": 0.8845}, {"ep": 1, "weak": 0.8025, "v11": 0.8845}, {"ep": 2, "weak": 0.8095, "v11": 0.8845}], "d13": [{"label": "ACL", "d": 0.0071}, {"label": "MCL", "d": -0.0049}, {"label": "Medial Meniscus", "d": 0.0029}, {"label": "Lateral Meniscus", "d": 0.0085}, {"label": "Medial OA", "d": 0.0002}, {"label": "Lateral OA", "d": 0.0005}, {"label": "PF OA", "d": 0.003}, {"label": "Effusion", "d": 0.0079}, {"label": "Synovitis", "d": 0.0092}, {"label": "Baker's", "d": 0.0126}, {"label": "Contusion", "d": 0.0056}, {"label": "Fracture", "d": 0.0026}], "seeds": {"v11": [0.892, 0.8924, 0.8918], "v11_avg": 0.894, "auc": [0.899, 0.8994, 0.8985], "auc_avg": 0.9008}, "es": {"ACL": "LCA", "MCL": "LCM", "Medial Meniscus": "Menisco medial", "Lateral Meniscus": "Menisco lateral", "Medial OA": "Artrosis medial", "Lateral OA": "Artrosis lateral", "PF OA": "Artrosis PF", "Effusion": "Derrame", "Synovitis": "Sinovitis", "Baker's": "Quiste de Baker", "Contusion": "Contusión", "Fracture": "Fractura"}};
+  const f3 = (x) => KIT.nf(x, 3), W = (v, lo, hi) => Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * 100 + "%";
+  function toggle(ids, fn) {
+    ids.forEach((id, i) => $(id).addEventListener("click", () => { ids.forEach((o, j) => $(o).setAttribute("aria-pressed", String(i === j))); fn(i); }));
+    fn(0);
+  }
+  function paint(host, items, lo, hi, best, fmt) {
+    host.innerHTML = "";
+    const rows = KIT.makeRows(host, items.map((it) => it.n)), top = Math.max(...items.map((it) => it.v));
+    rows.forEach((r, i) => {
+      const it = items[i];
+      r.fill.style.width = W(it.v, lo, hi);
+      r.val.textContent = (fmt || f3)(it.v);
+      if (it.m != null) { r.mark.hidden = false; r.mark.style.left = W(it.m, lo, hi); }
+      r.row.classList.toggle("top", best ? it.v === top : !!it.hi);
+    });
+  }
+  const softmax = (a) => { const m = Math.max(...a), e = a.map((x) => Math.exp(x - m)), s = e.reduce((p, q) => p + q, 0); return e.map((x) => x / s); };
+
+  toggle(["sb-pub", "sb-prv"], (k) => paint($("sb-rows"), D.subs.map((s) => ({ n: s.n, v: k ? s.prv : s.pub, m: k ? s.pub : s.prv })), 0.89, 0.93, true));
+
+  const les = [false, false, true, true, false, false, false, false], chips = $("at-chips");
+  const noise = [0.2, -0.1, 0.1, 0, -0.2, 0.15, -0.05, 0.05];
+  const att = () => {
+    const beta = +$("at-b").value, w = softmax(noise.map((z, i) => beta * ((les[i] ? 1 : 0) + z * 0.3)));
+    paint($("at-rows"), w.map((v, i) => ({ n: "corte " + (i + 1), v, hi: les[i] })), 0, 1, false, KIT.pct);
+    $("at-att").textContent = KIT.pct(w.reduce((s, v, i) => s + v * (les[i] ? 1 : 0), 0));
+    $("at-avg").textContent = KIT.pct(les.filter(Boolean).length / les.length);
+  };
+  les.forEach((on, i) => {
+    const b = document.createElement("button");
+    b.className = "btn"; b.type = "button"; b.textContent = "corte " + (i + 1); b.setAttribute("aria-pressed", String(on));
+    b.addEventListener("click", () => { les[i] = !les[i]; b.setAttribute("aria-pressed", String(les[i])); att(); });
+    chips.appendChild(b);
+  });
+  KIT.bindRange($("at-b"), $("at-bo"), 1, att);
+
+  const N = 10, sigA = [...Array(N)].map((_, i) => (i === 4 || i === 5 ? 1 : 0)), sigO = [...Array(N)].map((_, i) => ([0, 1, 8, 9].includes(i) ? 1 : 0));
+  toggle(["ph-sh", "ph-pl"], (k) => {
+    const sh = softmax(sigA.map((a, i) => 3 * (a + sigO[i]))), wa = k ? softmax(sigA.map((a) => 3 * a)) : sh, wo = k ? softmax(sigO.map((o) => 3 * o)) : sh;
+    paint($("ph-a"), wa.map((v, i) => ({ n: "corte " + (i + 1), v, hi: sigA[i] })), 0, 0.55, false, KIT.pct);
+    paint($("ph-o"), wo.map((v, i) => ({ n: "corte " + (i + 1), v, hi: sigO[i] })), 0, 0.55, false, KIT.pct);
+    $("ph-ea").textContent = KIT.pct(wa.reduce((s, v, i) => s + v * sigA[i], 0));
+    $("ph-eo").textContent = KIT.pct(wo.reduce((s, v, i) => s + v * sigO[i], 0));
+  });
+  paint($("d13-rows"), D.d13.map((r) => ({ n: D.es[r.label], v: r.d, m: 0, hi: r.d > 0 })), -0.006, 0.014, false, (x) => (x >= 0 ? "+" : "") + KIT.nf(x, 4));
+
+  const pos = [0.1, 0.9, -0.4, 0.5, 1.4, -0.9], neg = [-0.5, 0.3, -1.2, 0.8, -0.1, -0.8];
+  KIT.bindRange($("au-s"), $("au-so"), 2, (s) => {
+    const P = pos.map((x) => x + s);
+    let ok = 0, loss = 0;
+    P.forEach((p) => neg.forEach((q) => { ok += p > q ? 1 : p === q ? 0.5 : 0; loss += Math.log(1 + Math.exp(q - p)); }));
+    paint($("au-p"), P.map((v, i) => ({ n: "positivo " + (i + 1), v, hi: true })), -2, 4.5, false, (x) => KIT.nf(x, 2));
+    paint($("au-n"), neg.map((v, i) => ({ n: "negativo " + (i + 1), v })), -2, 4.5, false, (x) => KIT.nf(x, 2));
+    $("au-ok").textContent = KIT.nf(ok, 0) + " de 36"; $("au-v").textContent = f3(ok / 36); $("au-l").textContent = f3(loss / 36);
+  });
+  const sd = D.seeds;
+  paint($("sd-rows"), [["v1.1 semilla 42", sd.v11[0]], ["v1.1 semilla 43", sd.v11[1]], ["v1.1 semilla 44", sd.v11[2]], ["v1.1 promedio", sd.v11_avg, 1],
+    ["AUC semilla 42", sd.auc[0]], ["AUC semilla 43", sd.auc[1]], ["AUC semilla 44", sd.auc[2]], ["AUC promedio", sd.auc_avg, 1]]
+    .map(([n, v, h]) => ({ n, v, hi: !!h })), 0.88, 0.905, false);
+
+  toggle(["cx-16", "cx-24"], (k) => paint($("cx-rows"), (k ? D.c24 : D.c16).map((e) => ({ n: "época " + e.ep, v: e.weak, m: e.v11 })), 0.74, 0.90, true));
+
+  const avg = (key) => D.gold.reduce((a, r) => a + r[key], 0) / D.gold.length;
+  $("gd-win").textContent = D.gold.filter((r) => r.model > r.jev).length;
+  $("gd-m").textContent = f3(avg("model")); $("gd-j").textContent = f3(avg("jev"));
+  toggle(["gd-name", "gd-diff"], (k) => {
+    const gl = D.gold.slice(); if (k) gl.sort((a, b) => (b.model - b.jev) - (a.model - a.jev));
+    paint($("gd-rows"), gl.map((r) => ({ n: D.es[r.label], v: r.model, m: r.jev, hi: r.model > r.jev })), 0.7, 1.0, false);
+  });
+  const base = D.oof.find((r) => r.name === "v1.1");
+  toggle(["of-w", "of-g"], (k) => paint($("of-rows"), D.oof.map((r) => ({ n: r.name, v: k ? r.gold : r.weak, m: k ? base.gold : base.weak })), 0.86, 0.92, true));
+
+  const note = ["RadImageNet le gana por unos 0,06 a todas las variantes de MedSigLIP.",
+                "L4 es el vector actual. Solo L4+Z160, vista completa más zoom central, lo supera."];
+  toggle(["ex-msl", "ex-pyr"], (k) => { paint($("ex-rows"), k ? D.pyr : D.msl, 0.70, 0.81, true); $("ex-note").textContent = note[k]; });
+
+  ["datos", "att", "pl", "auc", "rank", "25d", "zoom"].forEach((i) => KIT.copyButton($("cp-" + i), $("src-" + i)));
+})();
+</script>
+</body>
+</html>
