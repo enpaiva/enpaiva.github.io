@@ -108,7 +108,7 @@ const SITE = {
     }).join("");
     side.innerHTML =
       '<div class="side-in">' +
-        '<a class="photo" href="' + ROOT + 'index.html" aria-label="Inicio">' + photo + "</a>" +
+        '<a class="photo' + (SITE.photo ? " has-img" : "") + '" href="' + ROOT + 'index.html" aria-label="Inicio">' + photo + "</a>" +
         '<div class="who"><p class="fullname">' + esc(SITE.name) + "</p>" +
           '<p class="org">' + esc(SITE.org) + (SITE.orgFlag ? ' <span role="img" aria-label="Paraguay">' + SITE.orgFlag + "</span>" : "") + "</p>" +
           '<p class="bio">' + esc(SITE.bio) + "</p></div>" +
