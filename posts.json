@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "rsna-rodilla",
+    "title": "Nueve experimentos en la competencia RSNA Knee Abnormality Detection",
+    "sum": "Mi participación en RSNA Knee Abnormality Detection con una GPU T4, contada en nueve experimentos. Un encoder RadImageNet congelado y un agregador con atención por hallazgo llegaron a 0,927, y entender por qué no pasaron de ahí fue lo más útil.",
+    "date": "23 oct 2026",
+    "read": "14 min",
+    "tags": [
+      "visión",
+      "imágenes médicas",
+      "Kaggle"
+    ],
+    "art": "bars"
+  }
+]
