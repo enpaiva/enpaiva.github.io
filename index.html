@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@500;600&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("tema");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>Enrique Paiva · Experimentos de IA</title>
+<meta name="description" content="Experimentos con modelos de lenguaje, con demos interactivas. Blog de Enrique Paiva, Think Paraguayo.">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="" data-page="home">
+<div class="shell">
+  <aside class="side" id="side" aria-label="Perfil"></aside>
+  <div class="content">
+    <div class="toolbar" id="toolbar"></div>
+    <main class="home">
+      <div class="home-head">
+        <h1>Experimentos de IA</h1>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="posts list" id="posts"></div>
+      <p class="empty" id="empty" hidden>No hay posts que coincidan con «<span id="empty-q"></span>».</p>
+      <div class="blank" id="blank" hidden>
+        <span id="blank-art"></span>
+        <h2>Todavía no hay posts</h2>
+        <p>Aquí van a aparecer los experimentos, del más nuevo al más antiguo.</p>
+      </div>
+      <button type="button" class="more" id="more" hidden>Ver más posts</button>
+    </main>
+  </div>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

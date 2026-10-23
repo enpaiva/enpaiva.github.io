@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@500;600&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("tema");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>Cómo se arma un post · Enrique Paiva</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="../../assets/site.css">
+</head>
+<body data-root="../../" data-page="post">
+<div class="progress" id="progress" hidden></div>
+<div class="shell">
+  <aside class="side" id="side" aria-label="Perfil"></aside>
+  <div class="content">
+    <div class="toolbar" id="toolbar"></div>
+
+    <!-- Página de referencia del formato. No figura en posts.json, así que no aparece en la portada.
+         Para un post nuevo: copiar esta carpeta, cambiar el contenido y sumar su entrada en posts.json. -->
+    <article class="col">
+      <header class="post-head">
+        <h1>Cómo se arma un post</h1>
+        <p class="lead" style="margin-top:16px">Página de referencia del formato. No aparece en la portada ni en el buscador.</p>
+        <div class="meta"><span>Referencia</span><span>4 pestañas</span></div>
+      </header>
+      <nav class="tabs" aria-label="Secciones del post">
+        <a href="#articulo" data-tab="articulo">Artículo</a>
+        <a href="#experimento" data-tab="experimento">Experimento</a>
+        <a href="#codigo" data-tab="codigo">Código</a>
+        <a href="#notas" data-tab="notas">Notas</a>
+      </nav>
+
+      <section class="tab-panel" data-tab="articulo">
+        <p>Cada post tiene una cabecera fija y debajo una barra de pestañas. La cabecera lleva el título, la bajada, la fecha y el tiempo de lectura. Las pestañas dividen el contenido en subpáginas.</p>
+        <h2>Para qué sirve cada pestaña</h2>
+        <p><b>Artículo</b> es el texto que se lee de corrido: la pregunta, qué se probó y qué salió. Es la pestaña que se abre por defecto.</p>
+        <p><b>Experimento</b> reúne los paneles interactivos y los resultados con datos reales. <b>Código</b> tiene los fragmentos para reproducirlo. <b>Notas</b> guarda fuentes, enlaces y lo que quedó pendiente.</p>
+        <p>Las pestañas son libres. Un post puede tener solo dos, o agregar otras como «Datos», «Prompts» o «Versión 2». Si un post no necesita pestañas, se borra la barra y las secciones, y el contenido va directo.</p>
+        <h2>Un enlace por pestaña</h2>
+        <p>Cada pestaña tiene su propia dirección: la del post más <code>#</code> y el nombre de la pestaña, por ejemplo <code>posts/plantilla/#experimento</code>. Así se puede compartir directamente el experimento o el código de un post.</p>
+      </section>
+
+      <section class="tab-panel" data-tab="experimento" hidden>
+        <p>Los paneles comparten un mismo formato: título, controles y resultado. Este calcula en vivo un softmax con temperatura sobre cuatro opciones.</p>
+        <figure class="demo">
+          <div class="demo-head"><b>Panel de ejemplo</b><span>softmax de 4 opciones</span></div>
+          <div class="demo-body">
+            <label class="ctl" for="pl-t"><span>Temperatura</span><input type="range" id="pl-t" min="0.1" max="3" step="0.05" value="1"><output id="pl-to">1,00</output></label>
+            <div class="rows" id="pl-rows"></div>
+            <div class="readout"><span>Opción más probable <b id="pl-top"></b></span></div>
+          </div>
+        </figure>
+        <p>Los números de un post real salen de los archivos de resultados del experimento, nunca escritos a mano.</p>
+      </section>
+
+      <section class="tab-panel" data-tab="codigo" hidden>
+        <p>El código va en bloques con botón para copiar.</p>
+        <div class="code">
+          <div class="code-head"><span>softmax.py</span><button class="btn" type="button" id="pl-copy">Copiar</button></div>
+<pre id="pl-src"><span class="k">import</span> numpy <span class="k">as</span> np
+
+<span class="k">def</span> softmax(z, T=1.0):
+    z = np.array(z) / T
+    p = np.exp(z - z.max())
+    <span class="k">return</span> p / p.sum()</pre>
+        </div>
+      </section>
+
+      <section class="tab-panel" data-tab="notas" hidden>
+        <ul class="plain">
+          <li>Fuentes: papers, documentación o conversaciones en las que se basa el experimento.</li>
+          <li>Repositorio y versión exacta del código usado.</li>
+          <li>Pendientes: lo que faltó probar y las ideas para una segunda parte.</li>
+        </ul>
+      </section>
+
+      <p class="foot">Enrique Paiva · Think Paraguayo · <a href="../../index.html">Todos los posts</a></p>
+    </article>
+  </div>
+</div>
+<script src="../../assets/site.js"></script>
+<script>
+/* script propio del post: usa window.KIT */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const L = ["A", "B", "C", "D"], Z = [2, 1, 0.5, 0], rows = KIT.makeRows($("pl-rows"), L);
+  KIT.bindRange($("pl-t"), $("pl-to"), 2, (T) => {
+    const e = Z.map((z) => Math.exp(z / T)), s = e.reduce((a, b) => a + b, 0), p = e.map((v) => v / s), top = p.indexOf(Math.max(...p));
+    rows.forEach((r, i) => { r.fill.style.width = p[i] * 100 + "%"; r.val.textContent = KIT.pct(p[i]); r.row.classList.toggle("top", i === top); });
+    $("pl-top").textContent = L[top] + " · " + KIT.pct(p[top]);
+  });
+  KIT.copyButton($("pl-copy"), $("pl-src"));
+})();
+</script>
+</body>
+</html>
